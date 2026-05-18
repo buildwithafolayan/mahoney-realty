@@ -76,8 +76,8 @@
             setTimeout(() => document.getElementById(toastId).style.display = 'none', 4000);
         }
 
-        document.getElementById('buyerForm').addEventListener('submit', (e) => handleForm(e, '/leads/buyer', 'buyerToast'));
-        document.getElementById('sellerForm').addEventListener('submit', (e) => handleForm(e, '/leads/seller', 'sellerToast'));
+        document.getElementById('buyerForm').addEventListener('submit', (e) => handleForm(e, '/api/leads/buyer', 'buyerToast'));
+        document.getElementById('sellerForm').addEventListener('submit', (e) => handleForm(e, '/api/leads/seller', 'sellerToast'));
     </script>
 </body>
 

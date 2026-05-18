@@ -75,3 +75,27 @@ def get_daily_stats(db: Session = Depends(get_db)):
             "count": count
         })
     return stats
+
+@router.get("/top-agent")
+def get_top_agent(db: Session = Depends(get_db)):
+    """Return the agent with the highest conversion rate."""
+    agents = db.query(Agent).all()
+    
+    top_agent = None
+    top_conversion_rate = -1
+    
+    for agent in agents:
+        total_leads = db.query(Lead).filter(Lead.assigned_agent_id == agent.id).count()
+        if total_leads == 0:
+            continue
+        responded_leads = db.query(Lead).filter(Lead.assigned_agent_id == agent.id, Lead.status != "New").count()
+        conversion_rate = responded_leads / total_leads
+        
+        if conversion_rate > top_conversion_rate:
+            top_conversion_rate = conversion_rate
+            top_agent = agent
+    
+    return {
+        "top_agent": top_agent.name if top_agent else None,
+        "conversion_rate": f"{(top_conversion_rate * 100):.1f}%" if top_agent else "N/A"
+    }

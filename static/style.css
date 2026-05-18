@@ -120,6 +120,48 @@ button:disabled {
     align-items: center;
 }
 
+.manual-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    padding: 20px 40px;
+}
+
+.manual-panel {
+    background: var(--navy-light);
+    border: 1px solid rgba(212, 175, 55, 0.12);
+    border-radius: 16px;
+    padding: 22px 24px;
+}
+
+.manual-panel h3 {
+    margin-top: 0;
+    margin-bottom: 18px;
+    font-size: 18px;
+}
+
+.manual-form-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.manual-form-grid textarea {
+    grid-column: span 2;
+    min-height: 120px;
+}
+
+.full-width {
+    width: 100%;
+}
+
+.manual-panel label {
+    display: block;
+    margin-bottom: 6px;
+    color: #A0AAB2;
+    font-size: 0.9rem;
+}
+
 /* ==========================================================
    METRICS CARDS
 ========================================================== */
@@ -338,6 +380,35 @@ tbody tr:hover {
     font-size: 13px;
     color: var(--gray);
     font-variant-numeric: tabular-nums;
+}
+
+.assign-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.action-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.inline-select {
+    min-width: 160px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    font-size: 13px;
+}
+
+.btn-assign {
+    padding: 8px 12px;
+    min-width: auto;
 }
 
 /* ==========================================================

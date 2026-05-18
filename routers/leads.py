@@ -5,7 +5,7 @@ from models import Lead, Agent, RoutingLog
 from datetime import datetime, timedelta
 import random
 
-router = APIRouter(tags=["Leads"])
+router = APIRouter(prefix="/api", tags=["Leads"])
 
 def route_lead(db: Session, lead: Lead):
     # Retrieve mock agents
@@ -92,6 +92,79 @@ def capture_seller(
     db.refresh(new_lead)
     background_tasks.add_task(route_lead_task, new_lead.id)
     return {"message": "Our team will contact you within 60 seconds."}
+
+@router.post("/leads/manual")
+def create_manual_lead(
+    background_tasks: BackgroundTasks,
+    name: str = Form(...),
+    email: str = Form(...),
+    phone: str = Form(...),
+    lead_type: str = Form(...),
+    budget_or_value: str = Form(...),
+    timeline: str = Form(...),
+    message: str = Form(""),
+    assigned_agent_id: int | None = Form(None),
+    db: Session = Depends(get_db)
+):
+    new_lead = Lead(
+        name=name,
+        email=email,
+        phone=phone,
+        lead_type=lead_type,
+        budget_or_value=budget_or_value,
+        timeline=timeline,
+        message=message
+    )
+    db.add(new_lead)
+    db.flush()
+    agent = None
+
+    if assigned_agent_id:
+        agent = db.query(Agent).filter(Agent.id == assigned_agent_id).first()
+        if agent:
+            new_lead.assigned_agent_id = agent.id
+            new_lead.response_scheduled_at = datetime.utcnow() + timedelta(seconds=60)
+            agent.leads_assigned += 1
+            db.add(RoutingLog(lead_id=new_lead.id, agent_id=agent.id, routing_reason="Manual assignment"))
+
+    db.commit()
+    db.refresh(new_lead)
+    return {
+        "status": "success",
+        "lead_id": new_lead.id,
+        "assigned_agent_id": new_lead.assigned_agent_id,
+        "assigned_agent": agent.name if agent else None
+    }
+
+@router.post("/leads/{lead_id}/assign")
+def assign_lead(lead_id: int, agent_id: int = Form(...), db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        return {"status": "not found"}
+
+    old_agent = None
+    if lead.assigned_agent_id:
+        old_agent = db.query(Agent).filter(Agent.id == lead.assigned_agent_id).first()
+
+    new_agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    if not new_agent:
+        return {"status": "invalid agent"}
+
+    if old_agent and old_agent.id != new_agent.id:
+        old_agent.leads_assigned = max(0, old_agent.leads_assigned - 1)
+    if old_agent is None or old_agent.id != new_agent.id:
+        new_agent.leads_assigned += 1
+
+    lead.assigned_agent_id = new_agent.id
+    lead.response_scheduled_at = datetime.utcnow() + timedelta(seconds=60)
+    reason = "Manual reassignment" if old_agent and old_agent.id != new_agent.id else "Manual assignment"
+    db.add(RoutingLog(lead_id=lead.id, agent_id=new_agent.id, routing_reason=reason))
+    db.commit()
+    return {
+        "status": "success",
+        "lead_id": lead.id,
+        "assigned_agent": new_agent.name
+    }
 
 @router.post("/simulate/new-lead")
 def simulate_lead(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):

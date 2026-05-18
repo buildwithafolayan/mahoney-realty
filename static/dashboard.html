@@ -27,6 +27,47 @@
         </div>
     </div>
 
+    <div class="manual-row">
+        <div class="manual-panel">
+            <h3>Manual Lead Entry</h3>
+            <form id="manualLeadForm">
+                <div class="manual-form-grid">
+                    <input type="text" name="name" placeholder="Full Name" required>
+                    <input type="email" name="email" placeholder="Email Address" required>
+                    <input type="tel" name="phone" placeholder="Phone Number" required>
+                    <select name="lead_type" id="manualLeadType" required>
+                        <option value="">Lead Type</option>
+                        <option value="buyer">Buyer</option>
+                        <option value="seller">Seller</option>
+                    </select>
+                    <input type="text" name="budget_or_value" placeholder="Budget / Value" required>
+                    <select name="timeline" required>
+                        <option value="">Timeline</option>
+                        <option value="ASAP">ASAP</option>
+                        <option value="1–3 months">1–3 months</option>
+                        <option value="3–6 months">3–6 months</option>
+                    </select>
+                    <select name="assigned_agent_id" id="manualAssignedAgent">
+                        <option value="">Assign to Agent (optional)</option>
+                    </select>
+                    <textarea name="message" placeholder="Notes or message"></textarea>
+                </div>
+                <button type="submit" class="btn-small">Create Lead</button>
+                <div id="manualLeadToast" style="display:none; color: var(--gold); margin-top: 10px; text-align:center;">Lead created successfully.</div>
+            </form>
+        </div>
+
+        <div class="manual-panel">
+            <h3>Manual Agent Assignment</h3>
+            <label for="manualLeadSelect">Select Lead</label>
+            <select id="manualLeadSelect" style="margin-bottom:12px;" class="full-width"></select>
+            <label for="manualAgentSelect">Select Agent</label>
+            <select id="manualAgentSelect" class="full-width"></select>
+            <button type="button" onclick="assignManualLead()" class="btn-small btn-outline">Assign Selected Lead</button>
+            <div id="manualAssignToast" style="display:none; color: var(--gold); margin-top: 10px; text-align:center;">Lead assigned successfully.</div>
+        </div>
+    </div>
+
     <!-- Metrics Cards -->
     <div class="metrics-row" id="metricsContainer"></div>
 
@@ -97,6 +138,8 @@
         ============================================================ */
         let countdownTimers = {};   // lead_id -> { remaining, intervalId }
         let dailyChart = null;
+        let dashboardLeads = [];
+        let dashboardAgents = [];
 
         /* ============================================================
            TOAST NOTIFICATION SYSTEM
@@ -186,6 +229,105 @@
             }
         }
 
+        function showManualToast(id, message) {
+            const toast = document.getElementById(id);
+            if (!toast) return;
+            toast.textContent = message;
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 4000);
+        }
+
+        function populateManualSelectors(leads, agents) {
+            const leadSelect = document.getElementById('manualLeadSelect');
+            const assignSelect = document.getElementById('manualAssignedAgent');
+            const agentSelect = document.getElementById('manualAgentSelect');
+
+            if (leadSelect) {
+                leadSelect.innerHTML = `<option value="">Select a lead</option>${leads.map(l => `\n                    <option value="${l.id}">${l.name} (${l.type} - ${l.status})</option>`).join('')}`;
+            }
+            if (assignSelect) {
+                assignSelect.innerHTML = `<option value="">Assign to Agent (optional)</option>${agents.map(a => `\n                    <option value="${a.id}">${a.name}</option>`).join('')}`;
+            }
+            if (agentSelect) {
+                agentSelect.innerHTML = `<option value="">Select an agent</option>${agents.map(a => `\n                    <option value="${a.id}">${a.name}</option>`).join('')}`;
+            }
+            updateInlineAssignOptions();
+        }
+
+        function renderAgentOptions() {
+            if (!dashboardAgents.length) {
+                return `<option value="">Loading agents…</option>`;
+            }
+            return dashboardAgents.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+        }
+
+        function updateInlineAssignOptions() {
+            const agentOptions = renderAgentOptions();
+            document.querySelectorAll('[id^="assign-agent-"]').forEach(select => {
+                const currentValue = select.value;
+                select.innerHTML = `<option value="">Assign agent</option>${agentOptions}`;
+                if (currentValue) select.value = currentValue;
+            });
+        }
+
+        async function assignLead(leadId) {
+            const select = document.getElementById(`assign-agent-${leadId}`);
+            if (!select) return;
+            const agentId = Number(select.value);
+            if (!agentId) {
+                showManualToast('manualAssignToast', 'Select an agent before assigning.');
+                return;
+            }
+            const response = await fetch(`/api/leads/${leadId}/assign`, {
+                method: 'POST',
+                body: new URLSearchParams({ agent_id: agentId })
+            });
+            if (!response.ok) {
+                showManualToast('manualAssignToast', 'Unable to assign lead.');
+                return;
+            }
+            showManualToast('manualAssignToast', 'Lead assigned successfully.');
+            await refreshAll();
+        }
+
+        async function createManualLead(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            if (!formData.get('assigned_agent_id')) {
+                formData.delete('assigned_agent_id');
+            }
+            const response = await fetch('/api/leads/manual', { method: 'POST', body: formData });
+            if (!response.ok) {
+                showManualToast('manualLeadToast', 'Unable to create lead.');
+                return;
+            }
+            form.reset();
+            showManualToast('manualLeadToast', 'Lead created successfully.');
+            await refreshAll();
+        }
+
+        async function assignManualLead() {
+            const leadSelect = document.getElementById('manualLeadSelect');
+            const agentSelect = document.getElementById('manualAgentSelect');
+            const leadId = Number(leadSelect.value);
+            const agentId = Number(agentSelect.value);
+            if (!leadId || !agentId) {
+                showManualToast('manualAssignToast', 'Please select both lead and agent.');
+                return;
+            }
+            const response = await fetch(`/api/leads/${leadId}/assign`, {
+                method: 'POST',
+                body: new URLSearchParams({ agent_id: agentId })
+            });
+            if (!response.ok) {
+                showManualToast('manualAssignToast', 'Unable to assign agent.');
+                return;
+            }
+            showManualToast('manualAssignToast', 'Lead assigned successfully.');
+            await refreshAll();
+        }
+
         /* ============================================================
            FETCH METRICS
         ============================================================ */
@@ -229,8 +371,11 @@
                 const res = await fetch('/api/leads');
                 if (!res.ok) throw new Error(`Leads fetch failed: ${res.status}`);
                 const leads = await res.json();
+                dashboardLeads = leads;
+                populateManualSelectors(dashboardLeads, dashboardAgents);
                 const tbody = document.querySelector('#leadsTable tbody');
                 const newLeadIds = leads.filter(l => l.status === 'New').map(l => l.id);
+                const agentOptions = renderAgentOptions();
 
                 tbody.innerHTML = leads.map(l => `
                     <tr class="${l.status === 'New' ? 'row-new-lead' : ''}">
@@ -242,7 +387,17 @@
                         <td class="cell-time">${timeSince(l.created_at)}</td>
                         <td id="timer-${l.id}">${l.status !== 'New' ? '<span class="timer-done"><i class="fa-solid fa-check-circle"></i> Done</span>' : '<span class="timer-loading">…</span>'}</td>
                         <td><span class="badge" style="${l.status === 'New' ? 'background:rgba(255,70,70,0.15);color:#ff4d4d;' : 'background:rgba(0,220,130,0.15);color:#00dc82;'}">${l.status}</span></td>
-                        <td>${l.status === 'New' ? `<button class="btn-small btn-action" onclick="markContacted(${l.id})"><i class="fa-solid fa-phone"></i> Contacted</button>` : '<i class="fa-solid fa-check" style="color:var(--gold)"></i>'}</td>
+                        <td>
+                            <div class="action-row">
+                                ${l.status === 'New' ? `<button class="btn-small btn-action" onclick="markContacted(${l.id})"><i class="fa-solid fa-phone"></i> Contacted</button>` : '<i class="fa-solid fa-check" style="color:var(--gold)"></i>'}
+                                <div class="assign-inline">
+                                    <select id="assign-agent-${l.id}" class="inline-select">
+                                        <option value="">Assign agent</option>${agentOptions}
+                                    </select>
+                                    <button class="btn-small btn-outline btn-assign" onclick="assignLead(${l.id})"><i class="fa-solid fa-user-check"></i></button>
+                                </div>
+                            </div>
+                        </td>
                     </tr>
                 `).join('');
 
@@ -262,7 +417,10 @@
                 const res = await fetch('/api/agents');
                 if (!res.ok) throw new Error(`Agents fetch failed: ${res.status}`);
                 const agents = await res.json();
+                dashboardAgents = agents;
+                populateManualSelectors(dashboardLeads, dashboardAgents);
                 const tbody = document.querySelector('#agentsTable tbody');
+                updateInlineAssignOptions();
                 tbody.innerHTML = agents.map(a => {
                     const rate = a.leads_assigned > 0
                         ? Math.round((a.leads_responded / a.leads_assigned) * 100)
@@ -373,7 +531,7 @@
             const btn = document.getElementById('simulateBtn');
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Simulating…';
-            const res = await fetch('/simulate/new-lead', { method: 'POST' });
+            const res = await fetch('/api/simulate/new-lead', { method: 'POST' });
             const data = await res.json();
             showToast(data.lead_name, data.assigned_agent);
             await refreshAll();
@@ -385,7 +543,7 @@
            MARK CONTACTED
         ============================================================ */
         async function markContacted(id) {
-            await fetch(`/leads/${id}/contacted`, { method: 'POST' });
+            await fetch(`/api/leads/${id}/contacted`, { method: 'POST' });
             if (countdownTimers[id]) {
                 clearInterval(countdownTimers[id].intervalId);
                 delete countdownTimers[id];
@@ -428,9 +586,11 @@
            REFRESH ALL
         ============================================================ */
         async function refreshAll() {
-            await Promise.all([fetchMetrics(), fetchLeads(), fetchAgents(), fetchDailyStats()]);
+            await fetchAgents();
+            await Promise.all([fetchMetrics(), fetchLeads(), fetchDailyStats()]);
         }
 
+        document.getElementById('manualLeadForm').addEventListener('submit', createManualLead);
         refreshAll();
         setInterval(refreshAll, 10000);
     </script>
