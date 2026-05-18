@@ -17,6 +17,8 @@ body {
     margin: 0;
     font-family: 'Inter', sans-serif;
     background-color: var(--navy);
+    background-image: radial-gradient(circle at top right, rgba(212, 175, 55, 0.08), transparent 24%),
+                      radial-gradient(circle at bottom left, rgba(0, 220, 130, 0.08), transparent 22%);
     color: var(--white);
     -webkit-font-smoothing: antialiased;
 }
@@ -132,6 +134,7 @@ button:disabled {
     border: 1px solid rgba(212, 175, 55, 0.12);
     border-radius: 16px;
     padding: 22px 24px;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.16);
 }
 
 .manual-panel h3 {
@@ -149,6 +152,12 @@ button:disabled {
 .manual-form-grid textarea {
     grid-column: span 2;
     min-height: 120px;
+}
+
+.manual-form-grid input,
+.manual-form-grid select,
+.manual-form-grid textarea {
+    border-color: rgba(255, 255, 255, 0.14);
 }
 
 .full-width {
@@ -298,6 +307,7 @@ button:disabled {
     padding: 24px;
     height: 260px;
     border: 1px solid rgba(212, 175, 55, 0.1);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 
 /* ==========================================================
@@ -314,6 +324,7 @@ button:disabled {
 .table-scroll {
     overflow-x: auto;
     border-radius: 10px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
 }
 
 table {
@@ -442,6 +453,11 @@ tbody tr:hover {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-small:hover {
+    transform: translateY(-1px);
 }
 
 .btn-outline {
@@ -452,6 +468,46 @@ tbody tr:hover {
 
 .btn-outline:hover {
     background: rgba(212, 175, 55, 0.12);
+    color: var(--white);
+    border-color: rgba(212, 175, 55, 0.35);
+}
+
+.action-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.assign-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.inline-select {
+    min-width: 160px;
+    max-width: 220px;
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--navy);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--white);
+}
+
+.btn-action,
+.btn-assign {
+    white-space: nowrap;
+}
+
+.badge-status {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cell-contact {
+    min-width: 200px;
 }
 
 .btn-action {
@@ -688,6 +744,27 @@ tbody tr:hover {
         gap: 14px;
         padding: 16px 20px;
         text-align: center;
+    }
+
+    .manual-row {
+        grid-template-columns: 1fr;
+        padding: 16px 20px;
+    }
+
+    .manual-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .manual-form-grid textarea {
+        grid-column: span 1;
+    }
+
+    .table-container,
+    .chart-container,
+    .metrics-row,
+    .integrations-row {
+        padding-left: 20px;
+        padding-right: 20px;
     }
 
     .dash-header h2 {
