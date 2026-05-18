@@ -30,19 +30,29 @@ def seed_data():
             db.add(Agent(**a))
         db.commit()
         
-        # Seed Mock Leads — Bug 5 fix: increment agent counters
+        # Seed Mock Leads — realistic luxury buyer/seller names
         agents_list = db.query(Agent).all()
-        for i in range(8):
-            l_type = random.choice(["buyer", "seller"])
+        mock_leads = [
+            {"name": "James Whitfield", "type": "buyer", "budget": "$2M+", "timeline": "ASAP"},
+            {"name": "Sophia Reeves", "type": "seller", "budget": "$1.4M", "timeline": "1–3 months"},
+            {"name": "Marcus Klein", "type": "buyer", "budget": "$1M–$2M", "timeline": "3–6 months"},
+            {"name": "Elena Caruso", "type": "seller", "budget": "$2.2M", "timeline": "ASAP"},
+            {"name": "Daniel Park", "type": "buyer", "budget": "$500K–$1M", "timeline": "1–3 months"},
+            {"name": "Victoria Nash", "type": "buyer", "budget": "$2M+", "timeline": "ASAP"},
+            {"name": "Ryan Holloway", "type": "seller", "budget": "$1.8M", "timeline": "3–6 months"},
+            {"name": "Claire Fontaine", "type": "buyer", "budget": "$1M–$2M", "timeline": "1–3 months"},
+        ]
+
+        for data in mock_leads:
             chosen_agent = random.choice(agents_list)
             status = random.choice(["New", "Contacted"])
             lead = Lead(
-                name=f"Lead {i+1}",
-                email=f"test{i}@example.com",
+                name=data["name"],
+                email=f"{data['name'].lower().replace(' ', '.')}@example.com",
                 phone="555-0100",
-                lead_type=l_type,
-                budget_or_value="$1M–$2M" if l_type == "buyer" else "$850K",
-                timeline="1-3 months",
+                lead_type=data["type"],
+                budget_or_value=data["budget"],
+                timeline=data["timeline"],
                 assigned_agent_id=chosen_agent.id,
                 status=status
             )
