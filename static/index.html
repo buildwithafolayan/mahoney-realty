@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kayla Mahoney Realty</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Playfair+Display:wght@600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="hero">
+        <h1>Find Your Dream Home With Expert Guidance</h1>
+        <p style="color: var(--gray);">Kayla Mahoney Realty — Exclusive properties. Unmatched service. 60-second
+            response guarantee.</p>
+    </div>
+
+    <div class="forms-container">
+        <form class="lead-form" id="buyerForm">
+            <h2>Get Started</h2>
+            <input type="text" name="name" placeholder="Full Name" required>
+            <input type="email" name="email" placeholder="Email Address" required>
+            <input type="tel" name="phone" placeholder="Phone Number" required>
+            <select name="budget" required>
+                <option value="">Budget Range</option>
+                <option value="$500K–$1M">$500K–$1M</option>
+                <option value="$1M–$2M">$1M–$2M</option>
+                <option value="$2M+">$2M+</option>
+            </select>
+            <select name="timeline" required>
+                <option value="">Timeline</option>
+                <option value="ASAP">ASAP</option>
+                <option value="1–3 months">1–3 months</option>
+                <option value="3–6 months">3–6 months</option>
+            </select>
+            <textarea name="message" placeholder="Message (Optional)"></textarea>
+            <button type="submit">Contact Agent</button>
+            <div id="buyerToast" style="display:none; color: var(--gold); margin-top: 10px; text-align:center;">Our team
+                will contact you within 60 seconds</div>
+        </form>
+
+        <form class="lead-form" id="sellerForm">
+            <h2>What's My Home Worth?</h2>
+            <input type="text" name="name" placeholder="Full Name" required>
+            <input type="email" name="email" placeholder="Email Address" required>
+            <input type="tel" name="phone" placeholder="Phone Number" required>
+            <input type="text" name="address" placeholder="Property Address" required>
+            <select name="value" required>
+                <option value="">Estimated Value</option>
+                <option value="$500K–$1M">$500K–$1M</option>
+                <option value="$1M–$2M">$1M–$2M</option>
+                <option value="$2M+">$2M+</option>
+            </select>
+            <select name="timeline" required>
+                <option value="">Timeline to Sell</option>
+                <option value="ASAP">ASAP</option>
+                <option value="1–3 months">1–3 months</option>
+                <option value="3–6 months">3–6 months</option>
+            </select>
+            <button type="submit">Get Valuation</button>
+            <div id="sellerToast" style="display:none; color: var(--gold); margin-top: 10px; text-align:center;">Our
+                team will contact you within 60 seconds</div>
+        </form>
+    </div>
+
+    <script>
+        async function handleForm(e, endpoint, toastId) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            await fetch(endpoint, { method: 'POST', body: formData });
+            e.target.reset();
+            document.getElementById(toastId).style.display = 'block';
+            setTimeout(() => document.getElementById(toastId).style.display = 'none', 4000);
+        }
+
+        document.getElementById('buyerForm').addEventListener('submit', (e) => handleForm(e, '/leads/buyer', 'buyerToast'));
+        document.getElementById('sellerForm').addEventListener('submit', (e) => handleForm(e, '/leads/seller', 'sellerToast'));
+    </script>
+</body>
+
+</html>

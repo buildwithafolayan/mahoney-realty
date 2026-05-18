@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kayla Mahoney Realty Command Dashboard</title>
+    <meta name="description" content="Real-time lead routing and agent performance dashboard for Kayla Mahoney Realty brokerage.">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Dashboard Header -->
+    <div class="dash-header">
+        <h2><i class="fa-solid fa-building-shield"></i> Kayla Mahoney Realty Command</h2>
+        <div class="dash-header-actions">
+            <button onclick="exportCSV()" class="btn-small btn-outline" id="exportBtn"><i class="fa-solid fa-file-csv"></i> Export Leads</button>
+            <button onclick="simulateLead()" class="btn-small" id="simulateBtn"><i class="fa-solid fa-bolt"></i> Simulate New Lead</button>
+        </div>
+    </div>
+
+    <!-- Metrics Cards -->
+    <div class="metrics-row" id="metricsContainer"></div>
+
+    <!-- Integration Badges -->
+    <div class="integrations-row">
+        <div class="integrations-bar">
+            <span class="integrations-label"><i class="fa-solid fa-plug-circle-check"></i> Integrations:</span>
+            <span class="integration-badge"><i class="fa-solid fa-circle-check"></i> GoHighLevel</span>
+            <span class="integration-badge"><i class="fa-solid fa-circle-check"></i> Follow Up Boss</span>
+            <span class="integration-badge"><i class="fa-solid fa-circle-check"></i> HubSpot</span>
+            <span class="integration-badge"><i class="fa-solid fa-circle-check"></i> Zillow</span>
+        </div>
+    </div>
+
+    <!-- Daily Lead Volume Chart -->
+    <div class="chart-container">
+        <h3 style="font-family: 'Inter', sans-serif;"><i class="fa-solid fa-chart-column"></i> Daily Lead Volume — Last 7 Days</h3>
+        <div class="chart-wrapper">
+            <canvas id="dailyChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Live Leads Table -->
+    <div class="table-container">
+        <h3 style="font-family: 'Inter', sans-serif;"><i class="fa-solid fa-satellite-dish"></i> Live Leads Routing</h3>
+        <div class="table-scroll">
+            <table id="leadsTable">
+                <thead>
+                    <tr>
+                        <th>Lead Name</th>
+                        <th>Type</th>
+                        <th>Contact</th>
+                        <th>Value/Budget</th>
+                        <th>Assigned Agent</th>
+                        <th>Time Since</th>
+                        <th>Response Timer</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Agent Performance Table -->
+    <div class="table-container">
+        <h3 style="font-family: 'Inter', sans-serif;"><i class="fa-solid fa-users"></i> Agent Performance Engine</h3>
+        <div class="table-scroll">
+            <table id="agentsTable">
+                <thead>
+                    <tr>
+                        <th>Agent Name</th>
+                        <th>Leads Assigned</th>
+                        <th>Response Rate</th>
+                        <th>Avg Response</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        /* ============================================================
+           STATE
+        ============================================================ */
+        let countdownTimers = {};   // lead_id -> { remaining, intervalId }
+        let dailyChart = null;
+
+        /* ============================================================
+           TOAST NOTIFICATION SYSTEM
+        ============================================================ */
+        function showToast(leadName, agentName) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast-notification';
+            toast.innerHTML = `
+                <div class="toast-icon"><i class="fa-solid fa-user-plus"></i></div>
+                <div class="toast-body">
+                    <strong class="toast-title">New Lead Captured</strong>
+                    <span class="toast-msg"><b>${leadName}</b> → ${agentName}</span>
+                </div>
+                <button class="toast-close" onclick="this.parentElement.remove()"><i class="fa-solid fa-xmark"></i></button>
+            `;
+            container.appendChild(toast);
+            // Trigger entrance animation
+            requestAnimationFrame(() => toast.classList.add('toast-show'));
+            // Auto-dismiss after 4 seconds
+            setTimeout(() => {
+                toast.classList.remove('toast-show');
+                toast.classList.add('toast-hide');
+                setTimeout(() => toast.remove(), 400);
+            }, 4000);
+        }
+
+        /* ============================================================
+           TIME SINCE — relative time formatting
+        ============================================================ */
+        function timeSince(isoString) {
+            if (!isoString) return '—';
+            const created = new Date(isoString);
+            const now = new Date();
+            const diffSec = Math.floor((now - created) / 1000);
+            if (diffSec < 10) return 'Just now';
+            if (diffSec < 60) return `${diffSec}s ago`;
+            const diffMin = Math.floor(diffSec / 60);
+            if (diffMin < 60) return `${diffMin} min${diffMin !== 1 ? 's' : ''} ago`;
+            const diffHr = Math.floor(diffMin / 60);
+            if (diffHr < 24) return `${diffHr} hr${diffHr !== 1 ? 's' : ''} ago`;
+            const diffDay = Math.floor(diffHr / 24);
+            return `${diffDay} day${diffDay !== 1 ? 's' : ''} ago`;
+        }
+
+        /* ============================================================
+           COUNTDOWN TIMER — 60s for "New" leads
+        ============================================================ */
+        function startCountdown(leadId, createdAt) {
+            if (countdownTimers[leadId]) return; // already running
+            const created = new Date(createdAt);
+            const elapsed = Math.floor((new Date() - created) / 1000);
+            let remaining = Math.max(0, 60 - elapsed);
+
+            function updateDisplay() {
+                const el = document.getElementById(`timer-${leadId}`);
+                if (!el) { clearInterval(countdownTimers[leadId]?.intervalId); delete countdownTimers[leadId]; return; }
+                if (remaining <= 0) {
+                    el.innerHTML = `<span class="timer-expired"><i class="fa-solid fa-triangle-exclamation"></i> Overdue</span>`;
+                    clearInterval(countdownTimers[leadId]?.intervalId);
+                    delete countdownTimers[leadId];
+                    return;
+                }
+                const pct = (remaining / 60) * 100;
+                let colorClass = 'timer-green';
+                if (pct <= 33) colorClass = 'timer-red';
+                else if (pct <= 66) colorClass = 'timer-yellow';
+                el.innerHTML = `
+                    <div class="timer-ring ${colorClass}">
+                        <span class="timer-value">${remaining}s</span>
+                    </div>`;
+                remaining--;
+            }
+
+            updateDisplay();
+            const intervalId = setInterval(updateDisplay, 1000);
+            countdownTimers[leadId] = { remaining, intervalId };
+        }
+
+        function clearOldTimers(activeIds) {
+            const activeSet = new Set(activeIds);
+            for (const id of Object.keys(countdownTimers)) {
+                if (!activeSet.has(parseInt(id))) {
+                    clearInterval(countdownTimers[id]?.intervalId);
+                    delete countdownTimers[id];
+                }
+            }
+        }
+
+        /* ============================================================
+           FETCH METRICS
+        ============================================================ */
+        async function fetchMetrics() {
+            try {
+                const res = await fetch('/api/metrics');
+                if (!res.ok) throw new Error(`Metrics fetch failed: ${res.status}`);
+                const data = await res.json();
+                document.getElementById('metricsContainer').innerHTML = `
+                    <div class="metric-card">
+                        <div class="metric-icon"><i class="fa-solid fa-users"></i></div>
+                        <h3>Total Leads Today</h3>
+                        <p>${data.total_leads_today}</p>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon"><i class="fa-solid fa-stopwatch"></i></div>
+                        <h3>Avg Response Time</h3>
+                        <p>${data.average_response_time}</p>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+                        <h3>Leads Pending</h3>
+                        <p>${data.leads_pending}</p>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon"><i class="fa-solid fa-chart-line"></i></div>
+                        <h3>Conversion Rate</h3>
+                        <p>${data.conversion_rate}</p>
+                    </div>
+                `;
+            } catch (err) {
+                console.error('fetchMetrics error:', err);
+            }
+        }
+
+        /* ============================================================
+           FETCH LEADS — with Time Since + Countdown Timer
+        ============================================================ */
+        async function fetchLeads() {
+            try {
+                const res = await fetch('/api/leads');
+                if (!res.ok) throw new Error(`Leads fetch failed: ${res.status}`);
+                const leads = await res.json();
+                const tbody = document.querySelector('#leadsTable tbody');
+                const newLeadIds = leads.filter(l => l.status === 'New').map(l => l.id);
+
+                tbody.innerHTML = leads.map(l => `
+                    <tr class="${l.status === 'New' ? 'row-new-lead' : ''}">
+                        <td><strong>${l.name}</strong></td>
+                        <td><span class="badge"><i class="fa-solid ${l.type === 'Buyer' ? 'fa-key' : 'fa-house'}"></i> ${l.type}</span></td>
+                        <td class="cell-contact">${l.contact}</td>
+                        <td>${l.budget_or_value}</td>
+                        <td>${l.assigned_agent}</td>
+                        <td class="cell-time">${timeSince(l.created_at)}</td>
+                        <td id="timer-${l.id}">${l.status !== 'New' ? '<span class="timer-done"><i class="fa-solid fa-check-circle"></i> Done</span>' : '<span class="timer-loading">…</span>'}</td>
+                        <td><span class="badge" style="${l.status === 'New' ? 'background:rgba(255,70,70,0.15);color:#ff4d4d;' : 'background:rgba(0,220,130,0.15);color:#00dc82;'}">${l.status}</span></td>
+                        <td>${l.status === 'New' ? `<button class="btn-small btn-action" onclick="markContacted(${l.id})"><i class="fa-solid fa-phone"></i> Contacted</button>` : '<i class="fa-solid fa-check" style="color:var(--gold)"></i>'}</td>
+                    </tr>
+                `).join('');
+
+                // Start countdowns for New leads
+                leads.filter(l => l.status === 'New').forEach(l => startCountdown(l.id, l.created_at));
+                clearOldTimers(newLeadIds);
+            } catch (err) {
+                console.error('fetchLeads error:', err);
+            }
+        }
+
+        /* ============================================================
+           FETCH AGENTS — with Response Rate Progress Bars
+        ============================================================ */
+        async function fetchAgents() {
+            try {
+                const res = await fetch('/api/agents');
+                if (!res.ok) throw new Error(`Agents fetch failed: ${res.status}`);
+                const agents = await res.json();
+                const tbody = document.querySelector('#agentsTable tbody');
+                tbody.innerHTML = agents.map(a => {
+                    const rate = a.leads_assigned > 0
+                        ? Math.round((a.leads_responded / a.leads_assigned) * 100)
+                        : 0;
+                    let barColor = '#00dc82'; // green
+                    if (rate < 70) barColor = '#ff4d4d'; // red
+                    else if (rate < 90) barColor = '#ffb740'; // yellow
+
+                    return `
+                    <tr>
+                        <td><strong>${a.name}</strong></td>
+                        <td>${a.leads_assigned}</td>
+                        <td>
+                            <div class="progress-cell">
+                                <div class="progress-bar-track">
+                                    <div class="progress-bar-fill" style="width:${rate}%; background:${barColor};"></div>
+                                </div>
+                                <span class="progress-label">${a.leads_responded}/${a.leads_assigned} (${rate}%)</span>
+                            </div>
+                        </td>
+                        <td>${a.average_response_time}</td>
+                        <td><span class="badge badge-status"><i class="fa-solid fa-circle" style="color:${a.status === 'Available' ? '#00dc82' : '#ff4d4d'}; font-size:8px;"></i> ${a.status}</span></td>
+                    </tr>`;
+                }).join('');
+            } catch (err) {
+                console.error('fetchAgents error:', err);
+            }
+        }
+
+        /* ============================================================
+           FETCH DAILY STATS — Chart.js Bar Chart
+        ============================================================ */
+        async function fetchDailyStats() {
+            try {
+                const res = await fetch('/api/daily-stats');
+                if (!res.ok) throw new Error(`Daily stats fetch failed: ${res.status}`);
+                const stats = await res.json();
+                const labels = stats.map(s => s.date);
+                const data = stats.map(s => s.count);
+
+                const ctx = document.getElementById('dailyChart').getContext('2d');
+
+                if (dailyChart) {
+                    dailyChart.data.labels = labels;
+                    dailyChart.data.datasets[0].data = data;
+                    dailyChart.update();
+                    return;
+                }
+
+                dailyChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Leads',
+                            data: data,
+                            backgroundColor: 'rgba(212, 175, 55, 0.35)',
+                            borderColor: '#D4AF37',
+                            borderWidth: 2,
+                            borderRadius: 6,
+                            hoverBackgroundColor: 'rgba(212, 175, 55, 0.6)',
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#1C2541',
+                                titleColor: '#D4AF37',
+                                bodyColor: '#fff',
+                                borderColor: 'rgba(212,175,55,0.3)',
+                                borderWidth: 1,
+                                cornerRadius: 8,
+                                padding: 12,
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    color: '#A0AAB2',
+                                    stepSize: 1,
+                                    font: { family: 'Inter', size: 12 }
+                                },
+                                grid: { color: 'rgba(255,255,255,0.05)' }
+                            },
+                            x: {
+                                ticks: {
+                                    color: '#A0AAB2',
+                                    font: { family: 'Inter', size: 12 }
+                                },
+                                grid: { display: false }
+                            }
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error('fetchDailyStats error:', err);
+            }
+        }
+
+        /* ============================================================
+           SIMULATE LEAD — with Toast Notification
+        ============================================================ */
+        async function simulateLead() {
+            const btn = document.getElementById('simulateBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Simulating…';
+            const res = await fetch('/simulate/new-lead', { method: 'POST' });
+            const data = await res.json();
+            showToast(data.lead_name, data.assigned_agent);
+            await refreshAll();
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-bolt"></i> Simulate New Lead';
+        }
+
+        /* ============================================================
+           MARK CONTACTED
+        ============================================================ */
+        async function markContacted(id) {
+            await fetch(`/leads/${id}/contacted`, { method: 'POST' });
+            if (countdownTimers[id]) {
+                clearInterval(countdownTimers[id].intervalId);
+                delete countdownTimers[id];
+            }
+            refreshAll();
+        }
+
+        /* ============================================================
+           EXPORT CSV
+        ============================================================ */
+        async function exportCSV() {
+            const res = await fetch('/api/leads');
+            const leads = await res.json();
+            if (!leads.length) { alert('No leads to export.'); return; }
+            const headers = ['ID', 'Name', 'Type', 'Contact', 'Budget/Value', 'Assigned Agent', 'Created At', 'Status'];
+            const rows = leads.map(l => [
+                l.id,
+                `"${l.name}"`,
+                l.type,
+                `"${l.contact}"`,
+                `"${l.budget_or_value}"`,
+                `"${l.assigned_agent}"`,
+                l.created_at || '',
+                l.status
+            ]);
+            let csv = headers.join(',') + '\n';
+            csv += rows.map(r => r.join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `kayla_mahoney_leads_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        /* ============================================================
+           REFRESH ALL
+        ============================================================ */
+        async function refreshAll() {
+            await Promise.all([fetchMetrics(), fetchLeads(), fetchAgents(), fetchDailyStats()]);
+        }
+
+        refreshAll();
+        setInterval(refreshAll, 10000);
+    </script>
+</body>
+
+</html>
